@@ -4,7 +4,7 @@ from discord.ext import commands
 import os
 
 # 봇의 설정
-bot_token = os.environ.get("discord_token")
+bot_token = os.getenv("discord_token")
 bot_application_id = os.environ.get("discord_application_key")
 
 # 인텐트 설정
@@ -28,7 +28,7 @@ class MyBot(commands.Bot):
 
     # 봇에 ?hello 명령어 추가
     @commands.command(name='hello')
-    async def hello(ctx):
+    async def 인사(self, ctx):
         await ctx.send("Hello!")
 
 # 봇 실행
