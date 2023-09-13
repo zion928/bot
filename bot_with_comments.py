@@ -3,7 +3,6 @@ import requests
 import pymysql
 import discord
 from discord.ext import commands
-import pandas as pd
 
 # Constants
 RIOT_API_KEY = os.environ.get("RIOT_API_KEY")
@@ -22,19 +21,7 @@ DB_CONFIG = {
 def execute_query(query, data=None):
     pass
 
-def get_tier_score():
-    # Load the Excel file
-    df = pd.read_excel('TierScore.xlsx')
-
-    # Convert the dataframe to a dictionary where the key is a tuple (tier, rank)
-    tier_score = {}
-    for index, row in df.iterrows():
-        key = (row['Tier'], row['Rank'])
-        value = row['Score']
-        tier_score[key] = value
-
-    return tier_score
-
+# Riot API에서 소환사 데이터를 가져오는 함수
 def fetch_summoner_data_from_riot(summoner_name):
     try:
         response = requests.get(f"{BASE_RIOT_URL}summoner/v4/summoners/by-name/{summoner_name}", headers=HEADERS)
@@ -53,6 +40,7 @@ def fetch_matchlist_from_riot(summoner_id):
         print(f"Error fetching match list: {e}")
         return None
 
+# Riot API에서 소환사의 매치 히스토리를 분석하는 함수
 def analyze_match_history_from_riot(summoner_name):
     summoner_data = fetch_summoner_data_from_riot(summoner_name)
     if not summoner_data:
@@ -95,6 +83,7 @@ def insert_custom_data_into_database(summoner_name, tier, rank, main_lane, secon
         connection.close()
 
 
+# 소환사 데이터를 데이터베이스에 삽입하는 함수
 def insert_into_database(summoner_name):
     summoner_data = fetch_summoner_data_from_riot(summoner_name)
     if not summoner_data:
@@ -108,6 +97,7 @@ def insert_into_database(summoner_name):
     return insert_custom_data_into_database(summoner_name, tier, rank, main_lane, sub_lane)
 
 
+# 소환사 이름을 기반으로 데이터베이스에서 데이터를 가져오는 함수
 def fetch_from_database(summoner_name):
     query = "SELECT * FROM summoners WHERE name=%s"
     data = (summoner_name,)
@@ -119,6 +109,7 @@ def fetch_from_database(summoner_name):
         print(f"Error fetching from database: {e}")
         return None
 
+# 데이터베이스에서 특정 소환사 데이터를 삭제하는 함수
 def delete_from_database(summoner_name):
     query = "DELETE FROM summoners WHERE name=%s"
     data = (summoner_name,)
@@ -130,14 +121,17 @@ def delete_from_database(summoner_name):
         print(f"Error deleting from database: {e}")
         return False
 
+# 데이터베이스의 특정 소환사 데이터를 업데이트하는 함수
 def update_database(summoner_name):
     return insert_into_database(summoner_name)
 
 # Bot setup
+# 디스코드 봇의 기본 의도 설정
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
 
+# 봇 명령어 접두사 및 의도 설정
 bot = commands.Bot(
     command_prefix='?', 
     intents=intents,
@@ -146,34 +140,37 @@ bot = commands.Bot(
 
 # Bot events and commands
 @bot.event
+# 봇이 준비되었을 때 실행되는 함수
 async def on_ready():
     print(f'We have logged in as {bot.user} (ID : {bot.user.id})')
     print('------')
 
 @bot.command()
+# 'hello' 명령어에 응답하는 함수
 async def hello(ctx):
     print("Hello command received!")
     await ctx.send("Hello!")
 
 @bot.command(name='등록')
-async def register_summoner(ctx, *args):
-    if len(args) == 6:
+# '등록' 명령어를 처리하는 함수
+async def register_summoner(ctx, summoner_name, *args):
+    if len(args) == 4:
         # Custom registration
-        summoner_name = args[0]
-        tier, rank, main_lane, secondary_lane = args[1], args[2], args[3], args[4]
+        tier, rank, main_lane, secondary_lane = args
         # Insert these details directly into the database
-        success = insert_into_database(summoner_name, tier, rank, main_lane, secondary_lane)
+        success = insert_custom_data_into_database(summoner_name, tier, rank, main_lane, secondary_lane)
         if success:
             await ctx.send(f"{summoner_name}의 정보가 커스텀 등록되었습니다.")
         else:
-            await ctx.send(f"{summoner_name}의 등록에 실패하였습니다. 다시 시도해주세요.")
+            await ctx.send(f"{summoner_name}의 커스텀 등록에 실패하였습니다. 다시 시도해주세요.")
     else:
-        summoner_name = " ".join(args)
+        # Fetch data from Riot API and insert into DB
         success = insert_into_database(summoner_name)
         if success:
             await ctx.send(f"{summoner_name}이(가) 성공적으로 등록되었습니다.")
         else:
             await ctx.send(f"{summoner_name}의 등록에 실패하였습니다. 다시 시도해주세요.")
+
 
 @bot.command(name='팀짜기')
 async def form_teams(ctx, *summoners):
